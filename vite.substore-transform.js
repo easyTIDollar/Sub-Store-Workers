@@ -123,7 +123,8 @@ export default function getParser() {
             contents = replaceEvalRequire(contents, 'stream/promises', 'globalThis.__stream_promises_shim__');
 
             contents = contents.replace(/const\s+isNode\s*=\s*eval\s*\(\s*`typeof\s+process\s*!==\s*"undefined"`\s*\)/g, 'const isNode = false');
-            contents = contents.replace(/const\s+isSurge\s*=\s*typeof\s+\$httpClient\s*!==\s*['"]undefined['"]\s*&&\s*!isLoon\s*;/g, 'const isSurge = true;');
+            // 上游 (>=2.42.5) 的条件链会追加新变量（如 `&& !isEgern`），这里匹配到分号为止，避免版本漂移导致补丁失配
+            contents = contents.replace(/const\s+isSurge\s*=\s*typeof\s+\$httpClient\s*!==\s*['"]undefined['"][^;]*;/g, 'const isSurge = true;');
 
             assertNoDangerousRequireResidue(contents, id, this);
 
