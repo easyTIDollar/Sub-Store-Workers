@@ -63,6 +63,11 @@ export function subStoreTransformPlugin() {
         );
     }
 
+    function replacePlainRequire(contents, moduleName, replacement) {
+        const escaped = moduleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\//g, '\\/');
+        return contents.replace(new RegExp(`(?<!['"\`])\\brequire\\s*\\(\\s*['"\`]${escaped}['"\`]\\s*\\)`, 'g'), replacement);
+    }
+
     function assertNoDangerousRequireResidue(contents, id, pluginContext) {
         const matched = dangerousRequirePatterns.find((pattern) => pattern.test(contents));
         if (matched) {
@@ -121,6 +126,13 @@ export default function getParser() {
             contents = replaceEvalRequire(contents, 'nanoid', '({ nanoid: (size = 21) => crypto.randomUUID().replace(/-/g, "").slice(0, size) })');
             contents = replaceEvalRequire(contents, '@maxmind/geoip2-node', '({ Reader: { openBuffer: () => ({ country: () => null, asn: () => null }) } })');
             contents = replaceEvalRequire(contents, 'stream/promises', 'globalThis.__stream_promises_shim__');
+
+            // 上游 2.42.5 起部分模块改用裸 require（如 runtime/path.js 的 tryNodeBuiltin(() => require('path'))），
+            // eval 包装形式不再命中，这里对裸 require 做同样的 shim 替换，否则残留自检会直接失败
+            contents = replacePlainRequire(contents, 'path', 'globalThis.__path_shim__');
+            contents = replacePlainRequire(contents, 'fs', 'globalThis.__fs_shim__');
+            contents = replacePlainRequire(contents, 'child_process', '({ execFile: () => {} })');
+            contents = replacePlainRequire(contents, 'stream/promises', 'globalThis.__stream_promises_shim__');
 
             contents = contents.replace(/const\s+isNode\s*=\s*eval\s*\(\s*`typeof\s+process\s*!==\s*"undefined"`\s*\)/g, 'const isNode = false');
             // 上游 (>=2.42.5) 的条件链会追加新变量（如 `&& !isEgern`），这里匹配到分号为止，避免版本漂移导致补丁失配
